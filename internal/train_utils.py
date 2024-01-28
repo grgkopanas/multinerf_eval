@@ -83,7 +83,11 @@ def compute_data_loss(batch, renderings, rays, loss_threshold, config):
     lossmult = jnp.ones_like(lossmult)
 
   for rendering in renderings:
-    resid_sq = (rendering['rgb'] - batch.rgb[..., :3])**2
+    resid_sq = (rendering['rgb']*batch.masks - batch.rgb[..., :3]*batch.masks)**2
+    #resid_sq = (rendering['rgb'] - batch.rgb[..., :3])**2
+    #print("rgb", rendering['rgb'].shape)
+    #print("batch_rgb", batch.rgb[..., :3].shape)
+    #print("masks", batch.masks.shape)
     denom = lossmult.sum()
     stats['mses'].append((lossmult * resid_sq).sum() / denom)
 

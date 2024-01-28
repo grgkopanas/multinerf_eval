@@ -87,6 +87,8 @@ class Batch:
   disps: Optional[_Array] = None
   normals: Optional[_Array] = None
   alphas: Optional[_Array] = None
+  masks: Optional[_Array] = None
+  image_name: Optional[str] = None
 
 
 class DataSplit(enum.Enum):

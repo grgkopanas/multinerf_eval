@@ -18,6 +18,7 @@ import functools
 from os import path
 import sys
 import time
+import os
 
 from absl import app
 from flax.metrics import tensorboard
@@ -117,6 +118,7 @@ def main(unused_argv):
 
       # Cast to 64-bit to ensure high precision for color correction function.
       gt_rgb = np.array(batch.rgb, dtype=np.float64)
+      gt_mask = np.array(batch.masks, dtype=np.float64)
       rendering['rgb'] = np.array(rendering['rgb'], dtype=np.float64)
 
       cc_start_time = time.time()
@@ -170,10 +172,19 @@ def main(unused_argv):
 
       if config.eval_save_output and (config.eval_render_interval > 0):
         if (idx % config.eval_render_interval) == 0:
+          img_name = path.basename(batch.image_name).split(".")[0]
+          subdir = path.dirname(batch.image_name)
+          os.makedirs(path.join(out_dir, subdir), exist_ok=True)
+          print("out_dir", out_dir)
+          print("subdir", subdir)
           utils.save_img_u8(postprocess_fn(rendering['rgb']),
-                            path_fn(f'color_{idx:03d}.png'))
+                            path.join(out_dir, subdir, f'color_{img_name}.png'))
           utils.save_img_u8(postprocess_fn(rendering['rgb_cc']),
-                            path_fn(f'color_cc_{idx:03d}.png'))
+                            path.join(out_dir, subdir, f'color_cc_{img_name}.png'))
+          utils.save_img_u8(postprocess_fn(gt_rgb),
+                            path.join(out_dir, subdir, f'gt_rgb_{img_name}.png'))
+          utils.save_img_u8(postprocess_fn(gt_mask.repeat(repeats=3, axis=2)),
+                            path.join(out_dir, subdir, f'gt_mask_{img_name}.png'))
 
           for key in ['distance_mean', 'distance_median']:
             if key in rendering:

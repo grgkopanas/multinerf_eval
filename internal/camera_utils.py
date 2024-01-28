@@ -198,7 +198,9 @@ def transform_poses_pca(poses: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     A tuple (poses, transform), with the transformed poses and the applied
     camera_to_world transforms.
   """
+  print("poses shape", poses.shape)
   t = poses[:, :3, 3]
+  print("tmax", t.max())
   t_mean = t.mean(axis=0)
   t = t - t_mean
 
@@ -212,6 +214,7 @@ def transform_poses_pca(poses: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
   transform = np.concatenate([rot, rot @ -t_mean[:, None]], -1)
   poses_recentered = unpad_poses(transform @ pad_poses(poses))
+  print("poses", poses_recentered, poses_recentered.max())
   transform = np.concatenate([transform, np.eye(4)[3:]], axis=0)
 
   # Flip coordinate system if z component of y-axis is negative
@@ -220,6 +223,7 @@ def transform_poses_pca(poses: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     transform = np.diag(np.array([1, -1, -1, 1])) @ transform
 
   # Just make sure it's it in the [-1, 1]^3 cube
+  print(poses_recentered[:, :3, 3].max())
   scale_factor = 1. / np.max(np.abs(poses_recentered[:, :3, 3]))
   poses_recentered[:, :3, 3] *= scale_factor
   transform = np.diag(np.array([scale_factor] * 3 + [1])) @ transform

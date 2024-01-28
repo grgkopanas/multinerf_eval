@@ -52,8 +52,8 @@ def main(unused_argv):
   if config.batch_size % jax.device_count() != 0:
     raise ValueError('Batch size must be divisible by the number of devices.')
 
-  dataset = datasets.load_dataset('train', config.data_dir, config)
   test_dataset = datasets.load_dataset('test', config.data_dir, config)
+  dataset = datasets.load_dataset('train', config.data_dir, config)
 
   np_to_jax = lambda x: jnp.array(x) if isinstance(x, np.ndarray) else x
   cameras = tuple(np_to_jax(x) for x in dataset.cameras)

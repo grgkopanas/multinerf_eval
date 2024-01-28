@@ -100,7 +100,7 @@ class NeRFSceneManager(pycolmap.SceneManager):
     # Convert extrinsics to camera-to-world.
     c2w_mats = np.linalg.inv(w2c_mats)
     poses = c2w_mats[:, :3, :4]
-
+    print("poses constructor", poses.shape)
     # Image names from COLMAP. No need for permuting the poses according to
     # image names anymore.
     names = [imdata[k].name for k in imdata]
@@ -446,6 +446,11 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
     if self._load_normals:
       batch['normals'] = self.normal_images[cam_idx, pix_y_int, pix_x_int]
       batch['alphas'] = self.alphas[cam_idx, pix_y_int, pix_x_int]
+    batch['masks'] = self.masks[cam_idx, pix_y_int, pix_x_int]
+    try:
+      batch['image_name'] = self.image_names[cam_idx]
+    except:
+      pass
     return utils.Batch(**batch)
 
   def _next_train(self) -> utils.Batch:
@@ -564,20 +569,26 @@ class LLFF(Dataset):
   """LLFF Dataset."""
 
   def _load_renderings(self, config):
+    print(self.split.value)
     """Load images from disk."""
     # Set up scaling factor.
     image_dir_suffix = ''
     # Use downsampling factor (unless loading training split for raw dataset,
     # we train raw at full resolution because of the Bayer mosaic pattern).
-    if config.factor > 0 and not (config.rawnerf_mode and
-                                  self.split == utils.DataSplit.TRAIN):
-      image_dir_suffix = f'_{config.factor}'
-      factor = config.factor
+    if not config.custom_images_folder:
+      if config.factor > 0 and not (config.rawnerf_mode and
+                                    self.split == utils.DataSplit.TRAIN):
+        image_dir_suffix = f'_{config.factor}'
+        factor = config.factor
+      else:
+        factor = 1
+      images_foldername = 'images'
     else:
+      images_foldername = config.custom_images_folder
       factor = 1
 
     # Copy COLMAP data to local disk for faster loading.
-    colmap_dir = os.path.join(self.data_dir, 'sparse/0/')
+    colmap_dir = os.path.join(self.data_dir, config.sparse_folder)
 
     # Load poses.
     if utils.file_exists(colmap_dir):
@@ -614,21 +625,35 @@ class LLFF(Dataset):
 
     else:
       # Load images.
-      colmap_image_dir = os.path.join(self.data_dir, 'images')
-      image_dir = os.path.join(self.data_dir, 'images' + image_dir_suffix)
+      colmap_image_dir = os.path.join(self.data_dir, images_foldername)
+      image_dir = os.path.join(self.data_dir, images_foldername + image_dir_suffix)
       for d in [image_dir, colmap_image_dir]:
         if not utils.file_exists(d):
           raise ValueError(f'Image folder {d} does not exist.')
       # Downsampled images may have different names vs images used for COLMAP,
       # so we need to map between the two sorted lists of files.
-      colmap_files = sorted(utils.listdir(colmap_image_dir))
-      image_files = sorted(utils.listdir(image_dir))
+      print("HERE0")
+      oldcwd = os.getcwd()
+      os.chdir(colmap_image_dir)
+      colmap_files = sorted([os.path.join(dp, f)[2:] for dp, dn, fn in os.walk("./") for f in fn])
+      os.chdir(oldcwd)
+      #print(colmap_files)
+      oldcwd = os.getcwd()
+      os.chdir(image_dir)
+      image_files = sorted([os.path.join(dp, f)[2:] for dp, dn, fn in os.walk("./") for f in fn])
+      os.chdir(oldcwd)
+      #colmap_files = [x.replace(".jpg", ".png") for x in colmap_files]
+      #image_files = [x.replace(".jpg", ".png") for x in image_files]
+      image_names = [x.replace(".jpeg", ".png") for x in image_names]
+      print("HERE1", image_names[1])
+
       colmap_to_image = dict(zip(colmap_files, image_files))
       image_paths = [os.path.join(image_dir, colmap_to_image[f])
                      for f in image_names]
-      images = [utils.load_img(x) for x in image_paths]
-      images = np.stack(images, axis=0) / 255.
-
+      loaded_images = [utils.load_img(x) for x in image_paths]
+      images = np.stack(loaded_images, axis=0)[...,:3] / 255.
+      masks = np.stack(loaded_images, axis=0)[...,3:4] / 255.
+      print(masks.max(), masks.min())
       # EXIF data is usually only present in the original JPEG images.
       jpeg_paths = [os.path.join(colmap_image_dir, f) for f in image_names]
       exifs = [utils.load_exif(x) for x in jpeg_paths]
@@ -704,18 +729,37 @@ class LLFF(Dataset):
     }
     indices = split_indices[self.split]
     # All per-image quantities must be re-indexed using the split indices.
+    print(images.shape)
     images = images[indices]
     poses = poses[indices]
+    masks = masks[indices]
+    print("Loaded", images.shape[0], "images!")
+    print("indices shape", all_indices.shape)
     if self.exposures is not None:
       self.exposures = self.exposures[indices]
     if config.rawnerf_mode:
       for key in ['exposure_idx', 'exposure_values']:
         self.metadata[key] = self.metadata[key][indices]
 
+    if self.split.value == "test":
+        self.image_names = [image_names[i] for i in indices]
+    elif self.split.value == "train":
+        self.image_names = [image_names[idx] for idx, flag in enumerate(indices) if flag==True]
+    
+    img_names_filepath = os.path.join(colmap_dir, self.split.value + ".txt")
+    with open(img_names_filepath, 'w') as file:
+      # Write each string from the list to the file
+      for img_name in self.image_names:
+        file.write(img_name + "\n")  # Add a newline character to separate each string
+    print("Exported:", img_names_filepath, len(self.image_names))
+    #print(image_names)
+    #print(indices)
+
     self.images = images
+    self.masks = masks
     self.camtoworlds = self.render_poses if config.render_path else poses
     self.height, self.width = images.shape[1:3]
-
+    print("Loading Done")
 
 class TanksAndTemplesNerfPP(Dataset):
   """Subset of Tanks and Temples Dataset as processed by NeRF++."""

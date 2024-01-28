@@ -55,7 +55,7 @@ class Config:
   # ordering (affects heldout test set).
   forward_facing: bool = False  # Set to True for forward-facing LLFF captures.
   render_path: bool = False  # If True, render a path. Used only by LLFF.
-  llffhold: int = 8  # Use every Nth image for the test set. Used only by LLFF.
+  llffhold: int = 50  # Use every Nth image for the test set. Used only by LLFF.
   # If true, use all input images for training.
   llff_use_all_images_for_training: bool = False
   use_tiffs: bool = False  # If True, use 32-bit TIFFs. Used only by Blender.
@@ -76,9 +76,11 @@ class Config:
   vis_num_rays: int = 16  # The number of rays to visualize.
   # Decimate images for tensorboard (ie, x[::d, ::d]) to conserve memory usage.
   vis_decimate: int = 0
+  custom_images_folder: Optional[str] = None
+  sparse_folder: Optional[str] = 'sparse/0/'
 
   # Only used by train.py:
-  max_steps: int = 250000  # The number of optimization steps.
+  max_steps: int = 350000  # The number of optimization steps.
   early_exit_steps: Optional[int] = None  # Early stopping, for debugging.
   checkpoint_every: int = 25000  # The number of steps to save a checkpoint.
   print_every: int = 100  # The number of steps between reports to tensorboard.
